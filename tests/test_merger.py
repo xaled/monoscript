@@ -38,6 +38,37 @@ class TestPythonModuleMerger(unittest.TestCase):
         all_wrong = merger.extract_explicit_all(assign_node_wrong)
         self.assertEqual(all_wrong, [])
 
+    def test_process_internal_imports(self):
+        # Create a mock file structure
+        merger = PythonModuleMerger("test_modules/module2_nested")
+
+        test_cases = [
+            ("from ....nested1 import nested1_b_function", "nested2/c/ca/__init__.py",
+             ['nested1/__init__.py'], ['nested1_b_function']),
+            ("from .b import nested1_b_function, nested1_b_function2", "nested1/__init__.py",
+             ['nested1/b.py'], ['nested1_b_function', 'nested1_b_function2']),
+            ("from .. import nested1_b_function", "nested1/a/ab.py",
+             ['nested1/__init__.py'], ['nested1_b_function']),
+            ("from module2_nested.nested2.b import nested2_b_function, nested2_b_function2", "nested2/__init__.py",
+             ['nested2/b.py'], ['nested2_b_function', 'nested2_b_function2']),
+            ("from .. import nested2_b_function", "nested2/a/ab.py",
+             ['nested2/__init__.py'], ['nested2_b_function']),
+            ("from ..nested1 import nested1_b_function", "nested1/b.py",
+             ['nested1/__init__.py'], ['nested1_b_function']),
+            ("import module2_nested.nested1.c, module2_nested.nested1.b", "nested1/b.py",
+             ['nested1/c/__init__.py', 'nested1/b.py'], None),
+
+        ]
+
+        for statement, cur_rel_path, import_rel_paths, imported_names in test_cases:
+            import_node = ast.parse(statement).body[0]
+            current_path = os.path.join(merger.module_path, cur_rel_path)
+            import_paths = [os.path.join(merger.module_path, rel_path) for rel_path in
+                            import_rel_paths] if import_rel_paths else None
+            result = merger.process_internal_imports(current_path, import_node)
+            self.assertEqual(result[0], import_paths)
+            self.assertEqual(result[1], imported_names)
+
     def test_merge_simple(self):
         with tempfile.TemporaryDirectory() as tempdir:
             merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir)
@@ -48,7 +79,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             with open(output_file, 'r') as f:
                 merged_code = f.read()
             print(merged_code)
-            self.assertIn("__all__ = ['a', 'b']", merged_code)
+            self.assertIn("__all__ = ['UtilClass', 'util_function']", merged_code)
             self.assertIn("def func1(): pass", merged_code)
             self.assertIn("import os", merged_code)
             self.assertIn("from tests.test_modules.test_module.module1 import func1", merged_code)
