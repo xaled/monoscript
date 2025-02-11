@@ -65,7 +65,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             current_path = os.path.join(merger.module_path, cur_rel_path)
             import_paths = [os.path.join(merger.module_path, rel_path) for rel_path in
                             import_rel_paths] if import_rel_paths else None
-            result = merger.process_internal_imports(current_path, import_node)
+            result = merger.process_internal_import(current_path, import_node)
             self.assertEqual(result[0], import_paths)
             self.assertEqual(result[1], imported_names)
 
@@ -79,7 +79,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             with open(output_file, 'r') as f:
                 merged_code = f.read()
             print(merged_code)
-            self.assertIn("__all__ = ['UtilClass', 'util_function']", merged_code)
+            self.assertIn("__all__ = ['UtilClass', 'CoreClass', 'util_function']", merged_code)
             self.assertIn("def func1(): pass", merged_code)
             self.assertIn("import os", merged_code)
             self.assertIn("from tests.test_modules.test_module.module1 import func1", merged_code)
