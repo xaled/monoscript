@@ -69,7 +69,7 @@ class PythonModuleMerger:
         # header and metadata # TODO
 
         # __all__
-        all_node = self.process_all()
+        all_node = self.generate_all_node()
         if all_node:
             merged_code.append(ast.unparse(ast.fix_missing_locations(all_node)))
             merged_code.append("\n\n")
@@ -279,6 +279,15 @@ class PythonModuleMerger:
 
         return final_list
 
+    def generate_all_node(self):
+        all_names = self.process_all()
+        if all_names:
+            return ast.Assign(
+                targets=[ast.Name(id="__all__")],
+                value=ast.List(elts=[ast.Constant(value=item) for item in all_names], )
+            )
+        return None
+
     def process_all(self):
         if self.process_all_strategy == ProcessAllStrategy.NONE:
             return None
@@ -294,10 +303,7 @@ class PythonModuleMerger:
             all_names = list(self.all_init_explicit_entries)
 
         all_names.extend(self.additional_all)
-        return ast.Assign(
-            targets=[ast.Name(id="__all__")],
-            value=ast.List(elts=[ast.Constant(value=item) for item in sorted(all_names)], )
-        )
+        return sorted(set(all_names))
 
 
 class ImportConflictException(Exception):

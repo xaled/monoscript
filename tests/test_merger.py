@@ -4,7 +4,7 @@ import unittest
 import tempfile
 from pprint import pprint
 
-from monoscript import PythonModuleMerger
+from monoscript import PythonModuleMerger, ProcessAllStrategy
 from monoscript.parser import ScriptParser
 
 
@@ -139,6 +139,44 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertIn("def util_function():", merged_code)
             self.assertIn("from os.path import join", merged_code)
             self.assertNotIn("import sys\nfrom os.path import join", merged_code)
+
+    def test_merge_all_strategies(self):
+        test_cases = [
+            ({}, ['CoreClass', 'UtilClass', 'util_function']),
+
+            (dict(process_all_strategy=ProcessAllStrategy.AUTO, custom_all=None, additional_all=None),
+             ['CoreClass', 'UtilClass', 'util_function']),
+
+            (dict(process_all_strategy=ProcessAllStrategy.NONE, custom_all=None, additional_all=None),
+             None),
+
+            (dict(process_all_strategy=ProcessAllStrategy.INIT, custom_all=None, additional_all=None),
+             []),
+
+            (dict(process_all_strategy=ProcessAllStrategy.AUTO, custom_all=['test1', 'test2'], additional_all=None),
+             ['test1', 'test2']),
+
+            (dict(process_all_strategy=ProcessAllStrategy.AUTO, custom_all=None, additional_all=['a1', 'a2']),
+             ['CoreClass', 'UtilClass', 'a1', 'a2', 'util_function']),
+
+            (dict(process_all_strategy=ProcessAllStrategy.NONE, custom_all=None, additional_all=['a1', 'a2']),
+             None),
+
+            (dict(process_all_strategy=ProcessAllStrategy.INIT, custom_all=None, additional_all=['a1', 'a2']),
+             ['a1', 'a2']),
+
+            (dict(process_all_strategy=ProcessAllStrategy.AUTO, custom_all=['test1', 'test2'],
+                  additional_all=['a1', 'a2']),
+             ['a1', 'a2', 'test1', 'test2']),
+
+        ]
+
+        for kwargs, expected_result in test_cases:
+            with tempfile.TemporaryDirectory() as tempdir:
+                merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir, **kwargs)
+                merger.merge_files()
+                all_names = merger.process_all()
+                self.assertEqual(expected_result, all_names)
 
     def test_merge_nested(self):
         with tempfile.TemporaryDirectory() as tempdir:

@@ -1,1 +1,1 @@
-from .merger import PythonModuleMerger
+from .merger import PythonModuleMerger, ProcessAllStrategy
