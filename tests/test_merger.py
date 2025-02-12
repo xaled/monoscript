@@ -42,35 +42,36 @@ class TestPythonModuleMerger(unittest.TestCase):
         self.assertNotIn(inside_function_code, parsed_code.get_code())
 
     def test_is_internal_import(self):
-        merger = PythonModuleMerger("test_modules/module1")  # static path
-        internal_import_node = ast.parse("from module1.utils import x").body[0]
-        self.assertTrue(merger.is_internal_import(internal_import_node))
-
-        internal_import_node_relative = ast.parse("from .utils import x").body[0]
-        self.assertTrue(merger.is_internal_import(internal_import_node_relative))
-
-        internal_import_node = ast.parse("import module1.utils").body[0]
-        self.assertTrue(merger.is_internal_import(internal_import_node))
-
-        external_import_node = ast.parse("import os").body[0]
-        self.assertFalse(merger.is_internal_import(external_import_node))
-
-        external_import_node = ast.parse("from os.path import join").body[0]
-        self.assertFalse(merger.is_internal_import(external_import_node))
+        test_cases = [
+            ("from module1.utils import x", True),
+            ("from .utils import x", True),
+            ("from .. import x", True),
+            ("from os.path import join", False),
+            ("import module1.utils", True),
+            ("import os, json", False),
+            ("import os, module1.utils", True),  # mixed
+        ]
+        for code, expected_result in test_cases:
+            parsed_code = ScriptParser(code).parse()
+            self.assertIs(parsed_code.children[0].is_internal_import('module1'), expected_result)
 
     def test_extract_explicit_all(self):
-        merger = PythonModuleMerger("test_modules/module1")
-        assign_node = ast.parse("__all__ = ['a', 'b']").body[0]
-        all_list = merger.extract_explicit_all(assign_node)
-        self.assertEqual(all_list, ['a', 'b'])
+        test_cases = [
+            ("from module1.utils import x", None),
+            ("__all__ = ['a', 'b']", ['a', 'b']),
+            ("__all__ = ('a', 'b')", ['a', 'b']),
+            ("__all__ += ('a', 'b')", ['a', 'b']),
+            ("__all__ : list = ('a', 'b')", ['a', 'b']),
+            ("__all__ = not_all = ('a', 'b')", ['a', 'b']),
+            ("not_all = __all__ = ('a', 'b')", ['a', 'b']),
+            ("__all__ = 1", []),
+            ("__all__ = ['a', 'b', None]", ['a', 'b']),
+            ("__all__ = ['a', 'b',\n'c',\nNone\n]", ['a', 'b', 'c']),
 
-        assign_node_tuple = ast.parse("__all__ = ('a', 'b')").body[0]
-        all_tuple = merger.extract_explicit_all(assign_node_tuple)
-        self.assertEqual(all_tuple, ['a', 'b'])
-
-        assign_node_wrong = ast.parse("__all__ = 1").body[0]
-        all_wrong = merger.extract_explicit_all(assign_node_wrong)
-        self.assertEqual(all_wrong, [])
+        ]
+        for code, expected_result in test_cases:
+            parsed_code = ScriptParser(code).parse()
+            self.assertEqual(parsed_code.children[0].extract_all_names(), expected_result)
 
     def test_process_internal_imports(self):
         # Create a mock file structure

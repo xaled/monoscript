@@ -1,7 +1,7 @@
 import ast
 import os
 from collections import defaultdict
-from typing import List, Optional
+from typing import List, Optional, Generator
 
 
 class ScriptNode:
@@ -140,13 +140,40 @@ class ScriptNode:
             if child_node == value or isinstance(value, list) and child_node in value:  # List of child nodes
                 return value
 
+    def find_node_in_children(self, node):
+        for child in self.children:
+            if child.node == node:
+                return child
+
     def is_internal_import(self, module_name):
         """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
         if isinstance(self.node, ast.Import):
+            # TODO: Fix any by extracting imports or adding a warning if not all
             return any(alias.name.startswith(module_name + ".") for alias in self.node.names)
         elif isinstance(self.node, ast.ImportFrom):
             return self.node.level > 0 or self.node.module.startswith(module_name + '.')
         return False
+
+    def extract_all_names(self) -> Optional[List[str]]:
+        if not isinstance(self.node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            return
+
+        # accept only += AugAssign
+        if isinstance(self.node, ast.AugAssign) and not isinstance(self.node.op, ast.Add):
+            return
+
+        targets = self.node.targets if isinstance(self.node, ast.Assign) else [self.node.target]
+
+        # __all__ is target
+        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in targets):
+            return
+
+        # find string literals in the value expression
+        # value_script_node = self.find_node_in_children(self.node.value)
+        # all_names = [n.s for n in value_script_node.walk() if isinstance(n, ast.Str)]
+
+        all_names = [elt.s for elt in getattr(self.node.value, 'elts', []) if isinstance(elt, ast.Str)]
+        return all_names
 
     @staticmethod
     def parse_node(node, code_lines, parent: 'ScriptNode' = None) -> 'ScriptNode':
@@ -171,6 +198,14 @@ class ScriptNode:
 
         return script_node
 
+    def walk(self) -> Generator['ScriptNode', None, None]:
+        for child in self.children:
+            yield from child.walk()
+        yield self
+
+    def remove(self):
+        self.parent.remove_child(self)
+
 
 class ScriptParser:
     def __init__(self, code):
@@ -186,33 +221,6 @@ class ScriptParser:
         # Process the top-level nodes
         return ScriptNode.parse_node(tree, self.code_lines)
 
-    # def process(self, module_name, file_path):
-    #     """Parses a Python file and extracts valid code while handling imports, '__all__', and redundant entries."""
-    #     with open(file_path, "r", encoding="utf-8") as f:
-    #         tree = ast.parse(f.read(), filename=os.path.basename(file_path))
-    #
-    #     new_body = []
-    #     explicit_all_entries = set()
-    #     external_imports = set()
-    #     internal_imports = set()
-    #
-    #     for node in tree.body:
-    #         if isinstance(node, (ast.Import, ast.ImportFrom)):  # process top-level imports
-    #             if is_internal_import(module_name, node):
-    #                 internal_imports.add(node)
-    #             else:
-    #                 external_imports.add(node)
-    #         elif isinstance(node, (ast.Assign, ast.AugAssign)) and any(  # process __all__
-    #                 isinstance(target, ast.Name) and target.id == "__all__" for target in
-    #                 (node.targets if isinstance(node, ast.Assign) else [node.target])
-    #         ):
-    #             explicit_all_entries.update(extract_explicit_all(node))
-    #         else:
-    #             new_body.append(node)
-    #
-    #     return new_body, explicit_all_entries, external_imports, internal_imports
-    #
-
 
 # def is_internal_import(module_name, node):
 #     """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
@@ -223,14 +231,14 @@ class ScriptParser:
 #     return False
 
 
-def extract_explicit_all(node):
-    """Extracts explicit '__all__' assignments from a module."""
-    if isinstance(node, ast.Assign):
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == "__all__" and isinstance(node.value,
-                                                                                      (ast.List, ast.Tuple)):
-                return [elt.s for elt in node.value.elts if isinstance(elt, ast.Str)]
-    return []
+# def extract_explicit_all(node):
+#     """Extracts explicit '__all__' assignments from a module."""
+#     if isinstance(node, ast.Assign):
+#         for target in node.targets:
+#             if isinstance(target, ast.Name) and target.id == "__all__" and isinstance(node.value,
+#                                                                                       (ast.List, ast.Tuple)):
+#                 return [elt.s for elt in node.value.elts if isinstance(elt, ast.Str)]
+#     return []
 
 
 def merge_cuts(cuts):
