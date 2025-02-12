@@ -124,6 +124,37 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertIn("__all__ = ['CoreClass', 'UtilClass', 'util_function']", merged_code)
             self.assertIn("def util_function():", merged_code)
             self.assertIn("from os.path import join", merged_code)
+            self.assertIn("import sys\nfrom os.path import join", merged_code)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir, organize_imports=False)
+            merger.merge_files()
+            self.assertTrue(os.path.exists(merger.output_file))
+            self.assertEqual(len(merger.processed_code), 3)
+
+            with open(merger.output_file, 'r') as f:
+                merged_code = f.read()
+
+            self.assertIn("__all__ = ['CoreClass', 'UtilClass', 'util_function']", merged_code)
+            self.assertIn("def util_function():", merged_code)
+            self.assertIn("from os.path import join", merged_code)
+            self.assertNotIn("import sys\nfrom os.path import join", merged_code)
+
+    def test_merge_nested(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module2_nested", output_dir=tempdir)
+            merger.merge_files()
+
+            with open(merger.output_file, 'r') as f:
+                merged_code = f.read()
+            # print(merged_code)
+
+            functions = ['nested1_b_function', 'nested1_b_function2', 'nested2_b_function', 'nested2_b_function2',
+                         'nested2_a_function1', 'nested2_aa_function', 'nested2_ab_function', 'nested2_ca_function',
+                         'nested1_a_function1', 'nested1_aa_function', 'nested1_ab_function', 'nested1_ca_function', ]
+
+            for function in functions:
+                self.assertIn(f"def {function}(", merged_code)
 
     # def test_merge_files_no_init(self):
     #     merger = PythonModuleMerger("tests/test_modules/test_module_no_init")

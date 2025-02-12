@@ -2,7 +2,7 @@ import os
 import ast
 from dataclasses import dataclass
 from enum import Enum
-from typing import Union
+from typing import Union, Optional
 
 from monoscript.parser import ScriptParser, ScriptNode
 
@@ -77,8 +77,9 @@ class PythonModuleMerger:
         # top level imports if organized
         if self.organize_imports:
             top_level_imports = self.organize_to_level_imports()
-            merged_code.extend([ast.unparse(node) + "\n" for node in top_level_imports])
-            merged_code.append("\n\n")
+            if top_level_imports:
+                merged_code.extend([ast.unparse(node) + "\n" for node in top_level_imports])
+                merged_code.append("\n\n")
 
         # code
         for parse_result, rel_path in self.processed_code:
@@ -91,7 +92,11 @@ class PythonModuleMerger:
                 node.remove()
 
             merged_code.append(f"# --- {rel_path} ---\n")
-            merged_code.extend(parse_result.root_node.get_code())
+            code = parse_result.root_node.get_code() if parse_result.root_node else None
+            if not code or not code.strip():
+                merged_code.append("# --- empty file")
+            else:
+                merged_code.append(code)
             merged_code.append("\n\n")
 
         return ''.join(merged_code)
@@ -101,14 +106,20 @@ class PythonModuleMerger:
         with open(file_path, "r", encoding="utf-8") as f:
             code = f.read()
 
-        parser = ScriptParser(code)
-        root_node = parser.parse()
-
         explicit_all_entries = set()
         all_nodes = list()
         external_imports_nodes = list()
         internal_imports_nodes = list()
         internal_imports_all = list()
+
+        if not code or not code.strip():
+            return FileParseResult(root_node=None, explicit_all_entries=explicit_all_entries, all_nodes=all_nodes,
+                                   external_imports_nodes=external_imports_nodes,
+                                   internal_imports_nodes=internal_imports_nodes,
+                                   internal_imports_all=internal_imports_all)
+
+        parser = ScriptParser(code)
+        root_node = parser.parse()
 
         # look for __all__ & imports in top level statements
         for node in root_node.children:
@@ -309,7 +320,7 @@ def unparse_node(node):
 
 @dataclass
 class FileParseResult:
-    root_node: ScriptNode
+    root_node: Optional[ScriptNode]
     explicit_all_entries: set[str]
     all_nodes: list[ScriptNode]
     external_imports_nodes: list[ScriptNode]
