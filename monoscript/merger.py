@@ -48,11 +48,16 @@ class PythonModuleMerger:
         """Merges all Python files into a single file while handling imports and '__all__'."""
         # Process __init__.py first (to extract __all__)
         init_file = os.path.join(self.module_path, "__init__.py")
+        main_file = os.path.join(self.module_path, "__main__.py")
+
+        if os.path.exists(main_file):
+            self.process_file(main_file)
+
         if os.path.exists(init_file):
             self.process_file(init_file)
 
-            for file_path in self.iter_files():
-                self.process_file(file_path, append=True)
+        for file_path in self.iter_files():
+            self.process_file(file_path, append=True)
 
         final_code = self.generate_code()
 

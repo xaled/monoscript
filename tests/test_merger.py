@@ -194,6 +194,17 @@ class TestPythonModuleMerger(unittest.TestCase):
             for function in functions:
                 self.assertIn(f"def {function}(", merged_code)
 
+    def test_merge_with_main(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module3_main", output_dir=tempdir)
+            merger.merge_files()
+            self.assertEqual(4, len(merger.processed_code))
+            self.assertEqual('__main__.py', merger.processed_code[-1][1])
+            self.assertTrue(os.path.exists(merger.output_file))
+            with open(merger.output_file, 'r') as f:
+                merged_code = f.read()
+            self.assertIn("if __name__ == '__main__':", merged_code)
+
     # def test_merge_files_no_init(self):
     #     merger = PythonModuleMerger("tests/test_modules/test_module_no_init")
     #     merger.merge_files()
