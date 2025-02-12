@@ -71,18 +71,18 @@ class ScriptNode:
                     # middle lines
                     for line_ix in range(start_line + 1, end_line):
                         lines_cuts[line_ix - self.start_line].append((0, len(lines[line_ix - 1])))
-            print(lines_cuts)
+            # print(lines_cuts)
 
             clipped_lines = list()
             for ix in range(len(lines)):
-                print(ix, not lines[ix].strip() or not lines_cuts[ix])
+                # print(ix, not lines[ix].strip() or not lines_cuts[ix])
                 if not lines[ix].strip() or not lines_cuts[ix]:
-                    print(lines[ix], lines_cuts[ix], merge_cuts(lines_cuts[ix]))
+                    # print(lines[ix], lines_cuts[ix], merge_cuts(lines_cuts[ix]))
 
                     clipped_lines.append(lines[ix])
                 else:
                     line = apply_cuts(lines[ix], cuts=merge_cuts(lines_cuts[ix]))
-                    print(lines[ix], lines_cuts[ix], merge_cuts(lines_cuts[ix]), repr(line))
+                    # print(lines[ix], lines_cuts[ix], merge_cuts(lines_cuts[ix]), repr(line))
                     line_stripped = line.strip()
                     if line_stripped and not line_stripped.startswith('#'):
                         clipped_lines.append(line)

@@ -3,9 +3,31 @@ import ast
 import unittest
 import tempfile
 from monoscript import PythonModuleMerger
+from monoscript.parser import ScriptParser
 
 
 class TestPythonModuleMerger(unittest.TestCase):
+
+    def test_parser(self):
+        filepath = "test_modules/parser_test.py"
+        with open(filepath) as fin:
+            code = fin.read()
+        parsed_code = ScriptParser().parse(code)
+        self.assertIn('import os', parsed_code.children[0].get_code())
+        self.assertIn('    from pathlib import Path', parsed_code.children[5].get_code())
+        self.assertIn('    from pathlib import Path', parsed_code.children[5].get_code())
+
+        function_node = parsed_code.children[6]
+        self.assertIsInstance(function_node.node, ast.FunctionDef)
+        self.assertIn('import json', function_node.children[2].get_code())
+
+        inside_function_code = 'my_list: List[int] = [1, 2, 3] # Example of type hint using imported List'
+        self.assertIn(inside_function_code, function_node.get_code())
+        self.assertIn(inside_function_code, parsed_code.get_code())
+
+        # remove function
+        parsed_code.remove_child(function_node)
+        self.assertNotIn(inside_function_code, parsed_code.get_code())
 
     def test_is_internal_import(self):
         merger = PythonModuleMerger("test_modules/module1")  # static path

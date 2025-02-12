@@ -31,49 +31,6 @@ class PythonModuleMerger:
         self.processed_code = []
         self.processed_files = set()
 
-    def is_internal_import(self, node):
-        """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
-        if isinstance(node, ast.Import):
-            return any(alias.name.startswith(self.module_name + ".") for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            return node.module and (node.module.startswith(self.module_name + '.') or node.level > 0)
-        return False
-
-    def extract_explicit_all(self, node):
-        """Extracts explicit '__all__' assignments from a module."""
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "__all__" and isinstance(node.value,
-                                                                                          (ast.List, ast.Tuple)):
-                    return [elt.s for elt in node.value.elts if isinstance(elt, ast.Str)]
-        return []
-
-    def parse_python_file(self, file_path):
-        """Parses a Python file and extracts valid code while handling imports, '__all__', and redundant entries."""
-        with open(file_path, "r", encoding="utf-8") as f:
-            tree = ast.parse(f.read(), filename=os.path.basename(file_path))
-
-        new_body = []
-        explicit_all_entries = set()
-        external_imports = set()
-        internal_imports = set()
-
-        for node in tree.body:
-            if isinstance(node, (ast.Import, ast.ImportFrom)):  # process top-level imports
-                if self.is_internal_import(node):
-                    internal_imports.add(node)
-                else:
-                    external_imports.add(node)
-            elif isinstance(node, (ast.Assign, ast.AugAssign)) and any(  # process __all__
-                    isinstance(target, ast.Name) and target.id == "__all__" for target in
-                    (node.targets if isinstance(node, ast.Assign) else [node.target])
-            ):
-                explicit_all_entries.update(self.extract_explicit_all(node))
-            else:
-                new_body.append(node)
-
-        return new_body, explicit_all_entries, external_imports, internal_imports
-
     def iter_files(self):
         for root, _, files in os.walk(self.module_path):
             for filename in sorted(files):
