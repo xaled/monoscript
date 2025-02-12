@@ -7,27 +7,64 @@ from typing import List, Optional
 class ScriptNode:
     def __init__(self, node: ast.AST, children: Optional[List['ScriptNode']] = None,
                  parent: 'ScriptNode' = None, code_lines=None, root: 'ScriptNode' = None):
-        self.parent = parent
+        self.parent: Optional[ScriptNode] = parent
         self.code_lines = code_lines
+        self.node = node  # The AST node
+        self.removed_parts = list()
+
+        # root and coords
         if root:
             self.root = root
-            self.start_line = getattr(node, 'lineno', None)
-            self.start_col = getattr(node, 'col_offset', None)
-            self.end_line = getattr(node, 'end_lineno', None)
-            self.end_col = getattr(node, 'end_col_offset', None)
+            self.start_line = getattr(self.node, 'lineno', None)
+            self.start_col = getattr(self.node, 'col_offset', None)
+            self.end_line = getattr(self.node, 'end_lineno', None)
+            self.end_col = getattr(self.node, 'end_col_offset', None)
         else:
             self.root = self
             self.start_line = 1
             self.start_col = 0
             self.end_line = len(self.code_lines)
             self.end_col = len(self.code_lines[-1])
-        self.node = node  # The AST node
-        self._code = None
+
+        # children
         self.children = children if children is not None else []  # Parsed children nodes
         for child in self.children:
             child.parent = self
 
-        self.removed_parts = list()
+        # context
+        if self.parent is None or isinstance(self.node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            self.context = list()
+        else:
+            self.context = self.parent.context
+
+        self._extract_context_names()
+
+    def _extract_context_names(self):
+        def _process_assign_targets(_targets):
+            for _target in _targets:
+                if isinstance(_target, ast.Name):
+                    self.context.append(_target.id)
+                elif isinstance(_target, ast.Tuple):
+                    _process_assign_targets(_target.elts)
+
+        if isinstance(self.node, (ast.Import, ast.ImportFrom)):
+            for alias in self.node.names:
+                self.context.append(alias.asname or alias.name)
+        elif isinstance(self.node, ast.Assign):
+            _process_assign_targets(self.node.targets)
+        elif isinstance(self.node, (ast.AnnAssign, ast.For)):
+            _process_assign_targets([self.node.target])
+        elif isinstance(self.node, ast.withitem):
+            if self.node.optional_vars:
+                _process_assign_targets([self.node.optional_vars])
+        elif isinstance(self.node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if self.parent:
+                self.parent.context.append(self.node.name)
+            else:
+                self.context.append(self.node.name)
+            # TODO: function & async function parameter names
+        elif isinstance(self.node, (ast.Global, ast.Nonlocal)):
+            self.context.extend(self.node.names)
 
     def __repr__(self):
         return f"ScriptNode(type={type(self.node).__name__}, code={repr(self.get_code())}, children={len(self.children)})"
@@ -41,13 +78,6 @@ class ScriptNode:
                 lines = list(self.code_lines)
             else:
                 lines = self.code_lines[self.start_line - 1:self.end_line]
-
-            # if self.end_col != len(lines[-1]):
-            #     _slice_line(-1, 0, self.end_col)
-            #
-            # if self.start_col != 0:
-            #     lines[0] = lines[0][self.start_col:]
-            #     _slice_line(0, self.start_col, None)
 
             # generate cuts
             lines_cuts = defaultdict(list)
@@ -110,102 +140,23 @@ class ScriptNode:
             if child_node == value or isinstance(value, list) and child_node in value:  # List of child nodes
                 return value
 
+    def is_internal_import(self, module_name):
+        """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
+        if isinstance(self.node, ast.Import):
+            return any(alias.name.startswith(module_name + ".") for alias in self.node.names)
+        elif isinstance(self.node, ast.ImportFrom):
+            return self.node.level > 0 or self.node.module.startswith(module_name + '.')
+        return False
 
-class ScriptParser:
-    def __init__(self):
-        self.code_lines = None
-        self.code = None
-
-    def parse(self, code: str) -> ScriptNode:
-        self.code = code
-        self.code_lines = code.splitlines()
-
-        # Parse the code into an AST
-        tree = ast.parse(self.code)
-
-        # Process the top-level nodes
-        return self._parse_node(tree)
-
-    # def _get_node_source(self, node: ast.AST, ):
-    #     """Extracts the code corresponding to the given node."""
-    #     # start_line, start_col, end_line, end_col = None, None, None, None
-    #     # print(self.code_lines)
-    #     result = None
-    #     partial = True
-    #     lines = None
-    #     if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
-    #         start_line, start_col = node.lineno, node.col_offset
-    #         end_line = getattr(node, 'end_lineno', None)
-    #         end_col = getattr(node, 'end_col_offset', None)
-    #
-    #         if end_line is not None and end_col is not None:
-    #             lines = self.code_lines[start_line - 1:end_line]
-    #             if start_col != 0 or end_col != len(self.code_lines[end_line - 1]):
-    #                 if start_line == end_line:
-    #                     result = self.code_lines[start_line - 1][start_col:end_col]
-    #                     # if lines[0].lstrip() == lines[0][start_col:end_col]:
-    #                     #     pass
-    #                     # else:
-    #                     #     print(f"{type(node)=}", start_line, start_col, end_line, end_col, )
-    #                     #     print(lines, result)
-    #                     #     print("---")
-    #                 else:
-    #                     print(f"{type(node)=}", start_line, start_col, end_line, end_col, )
-    #                     print(lines, result)
-    #                     print("---")
-    #                     result = (
-    #                             self.code_lines[start_line - 1][start_col:] + '\n' +
-    #                             '\n'.join(self.code_lines[start_line:end_line - 1]) + '\n' +
-    #                             self.code_lines[end_line - 1][:end_col]
-    #                     )
-    #
-    #             else:
-    #                 partial = False
-    #                 result = '\n'.join(lines)
-    #
-    #     # if unparse_result.strip() != result.strip():
-    #     #     print(f"{type(node)=}", start_line, start_col, end_line, end_col, )
-    #     #     print(repr(result))
-    #     #     print(repr(unparse_result))
-    #     #     print('---')
-    #
-    #     return result, lines, partial
-
-    # def _get_node_source(self, node: ast.AST, ) -> str:
-    #     """Extracts the code corresponding to the given node."""
-    #     # start_line, start_col, end_line, end_col = None, None, None, None
-    #     result = None
-    #     if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
-    #         start_line, start_col = node.lineno, node.col_offset
-    #         end_line = getattr(node, 'end_lineno', None)
-    #         end_col = getattr(node, 'end_col_offset', None)
-    #
-    #         if end_line is not None and end_col is not None:
-    #             if start_line == end_line:
-    #                 result = self.code_lines[start_line - 1][start_col:end_col]
-    #             else:
-    #                 result = (
-    #                         self.code_lines[start_line - 1][start_col:] + '\n' +
-    #                         '\n'.join(self.code_lines[start_line:end_line - 1]) + '\n' +
-    #                         self.code_lines[end_line - 1][:end_col]
-    #                 )
-    #
-    #     # if unparse_result.strip() != result.strip():
-    #     #     print(f"{type(node)=}", start_line, start_col, end_line, end_col, )
-    #     #     print(repr(result))
-    #     #     print(repr(unparse_result))
-    #     #     print('---')
-    #
-    #     return result
-
-    def _parse_node(self, node, parent: ScriptNode = None) -> ScriptNode:
+    @staticmethod
+    def parse_node(node, code_lines, parent: 'ScriptNode' = None) -> 'ScriptNode':
         # Extract the source substring for this node
 
         root = parent.root if parent else None
 
         # Create a ScriptNode for this AST node
         script_node = ScriptNode(node=node, children=[], parent=parent, root=root,
-                                 code_lines=self.code_lines)
+                                 code_lines=code_lines)
 
         # Extract children nodes
         children = []
@@ -213,47 +164,63 @@ class ScriptParser:
             if isinstance(value, list):  # List of child nodes
                 for item in value:
                     if isinstance(item, ast.AST):
-                        children.append(self._parse_node(item, parent=script_node))
+                        children.append(ScriptNode.parse_node(item, code_lines, parent=script_node))
             elif isinstance(value, ast.AST):  # Single child node
-                children.append(self._parse_node(value, parent=script_node))
+                children.append(ScriptNode.parse_node(value, code_lines, parent=script_node))
         script_node.children = children
 
         return script_node
 
-    def parse_python_file(self, module_name, file_path):
-        """Parses a Python file and extracts valid code while handling imports, '__all__', and redundant entries."""
-        with open(file_path, "r", encoding="utf-8") as f:
-            tree = ast.parse(f.read(), filename=os.path.basename(file_path))
 
-        new_body = []
-        explicit_all_entries = set()
-        external_imports = set()
-        internal_imports = set()
+class ScriptParser:
+    def __init__(self, code):
+        self.code = code
+        self.code_lines = None
 
-        for node in tree.body:
-            if isinstance(node, (ast.Import, ast.ImportFrom)):  # process top-level imports
-                if is_internal_import(module_name, node):
-                    internal_imports.add(node)
-                else:
-                    external_imports.add(node)
-            elif isinstance(node, (ast.Assign, ast.AugAssign)) and any(  # process __all__
-                    isinstance(target, ast.Name) and target.id == "__all__" for target in
-                    (node.targets if isinstance(node, ast.Assign) else [node.target])
-            ):
-                explicit_all_entries.update(extract_explicit_all(node))
-            else:
-                new_body.append(node)
+    def parse(self) -> ScriptNode:
+        self.code_lines = self.code.splitlines()
 
-        return new_body, explicit_all_entries, external_imports, internal_imports
+        # Parse the code into an AST
+        tree = ast.parse(self.code)
+
+        # Process the top-level nodes
+        return ScriptNode.parse_node(tree, self.code_lines)
+
+    # def process(self, module_name, file_path):
+    #     """Parses a Python file and extracts valid code while handling imports, '__all__', and redundant entries."""
+    #     with open(file_path, "r", encoding="utf-8") as f:
+    #         tree = ast.parse(f.read(), filename=os.path.basename(file_path))
+    #
+    #     new_body = []
+    #     explicit_all_entries = set()
+    #     external_imports = set()
+    #     internal_imports = set()
+    #
+    #     for node in tree.body:
+    #         if isinstance(node, (ast.Import, ast.ImportFrom)):  # process top-level imports
+    #             if is_internal_import(module_name, node):
+    #                 internal_imports.add(node)
+    #             else:
+    #                 external_imports.add(node)
+    #         elif isinstance(node, (ast.Assign, ast.AugAssign)) and any(  # process __all__
+    #                 isinstance(target, ast.Name) and target.id == "__all__" for target in
+    #                 (node.targets if isinstance(node, ast.Assign) else [node.target])
+    #         ):
+    #             explicit_all_entries.update(extract_explicit_all(node))
+    #         else:
+    #             new_body.append(node)
+    #
+    #     return new_body, explicit_all_entries, external_imports, internal_imports
+    #
 
 
-def is_internal_import(module_name, node):
-    """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
-    if isinstance(node, ast.Import):
-        return any(alias.name.startswith(module_name + ".") for alias in node.names)
-    elif isinstance(node, ast.ImportFrom):
-        return node.module and (node.module.startswith(module_name + '.') or node.level > 0)
-    return False
+# def is_internal_import(module_name, node):
+#     """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
+#     if isinstance(node, ast.Import):
+#         return any(alias.name.startswith(module_name + ".") for alias in node.names)
+#     elif isinstance(node, ast.ImportFrom):
+#         return node.module and (node.module.startswith(module_name + '.') or node.level > 0)
+#     return False
 
 
 def extract_explicit_all(node):

@@ -12,7 +12,7 @@ class TestPythonModuleMerger(unittest.TestCase):
         filepath = "test_modules/parser_test.py"
         with open(filepath) as fin:
             code = fin.read()
-        parsed_code = ScriptParser().parse(code)
+        parsed_code = ScriptParser(code).parse()
         self.assertIn('import os', parsed_code.children[0].get_code())
         self.assertIn('    from pathlib import Path', parsed_code.children[5].get_code())
         self.assertIn('    from pathlib import Path', parsed_code.children[5].get_code())
@@ -21,9 +21,21 @@ class TestPythonModuleMerger(unittest.TestCase):
         self.assertIsInstance(function_node.node, ast.FunctionDef)
         self.assertIn('import json', function_node.children[2].get_code())
 
-        inside_function_code = 'my_list: List[int] = [1, 2, 3] # Example of type hint using imported List'
+        inside_function_code = 'my_list: List[int] = [1, 2, 3]  # Example of type hint using imported List'
         self.assertIn(inside_function_code, function_node.get_code())
         self.assertIn(inside_function_code, parsed_code.get_code())
+
+        # testing context
+        self.assertIn('matho', parsed_code.context)
+        self.assertIn('dd', parsed_code.context)
+        self.assertIn('Counter', parsed_code.context)
+        self.assertIn('my_function', parsed_code.context)
+        self.assertIn('MyClass', parsed_code.context)
+        self.assertIn('json', function_node.context)
+        self.assertIn('my_var', function_node.context)
+        self.assertIn('d', function_node.context)
+        self.assertIn('sub_func', function_node.context)
+        self.assertIn('SubClass', function_node.context)
 
         # remove function
         parsed_code.remove_child(function_node)

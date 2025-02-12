@@ -2,10 +2,10 @@ import os
 import sys
 
 # Top-level import (standard)
-import math
+import math as matho
 
 # Top-level import (from)
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict as dd
 
 # Top-level import (as)
 import numpy as np
@@ -27,6 +27,8 @@ def my_function(arg1, arg2="default", *args, **kwargs):
     """
     # Import inside a function
     import json
+    global my_var
+    a, b, (c, d) = 1, 2, (3, 4)
 
     if arg1 > 10:
         # Import inside a conditional block within a function
@@ -38,14 +40,15 @@ def my_function(arg1, arg2="default", *args, **kwargs):
         # Import inside a conditional block within a function (from)
         from typing import List
 
-        my_list: List[int] = [1, 2, 3] # Example of type hint using imported List
+        my_list: List[int] = [1, 2, 3]  # Example of type hint using imported List
 
     elif arg1 == 10:
         result = arg1 + 5
     else:
-        result = arg1**2
+        result = arg1 ** 2
 
     for i in range(5):
+        nonlocal result
         # Import inside a loop
         from uuid import uuid4
         print(f"Value: {i} - UUID: {uuid4()}")
@@ -54,6 +57,13 @@ def my_function(arg1, arg2="default", *args, **kwargs):
         value = kwargs['key']
     except KeyError:
         value = "default_value"
+
+    if arg1:
+        def sub_func():
+            pass
+
+        class SubClass:
+            pass
 
     return result
 
@@ -104,22 +114,23 @@ if __name__ == "__main__":
     now = datetime.datetime.now()
     print(f"Current date and time: {now}")
 
-    my_path = Path("./some_file.txt") # Example usage of Path
+    my_path = Path("./some_file.txt")  # Example usage of Path
     print(f"Path exists: {my_path.exists()}")
 
-    random_number = rnd.randint(1, 10) # Example of using imported random as rnd
+    random_number = rnd.randint(1, 10)  # Example of using imported random as rnd
     print(f"Random number: {random_number}")
 
     # Example of using modules imported inside the function
     import json  # This import is redundant at the top level, but it's here for demonstration
+
     data = {"name": "Example", "age": 30}
     json_string = json.dumps(data)
     print(json_string)
 
-
     # Internal module import (assuming 'my_module.py' is in the same directory)
     try:
         import my_module  # Example of an internal module import
+
         my_module.my_internal_function()
     except ImportError:
         print("my_module not found.  Create my_module.py in the same directory to test.")
