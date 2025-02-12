@@ -1,7 +1,10 @@
 import os
 import ast
+from dataclasses import dataclass
 from enum import Enum
 from typing import Union
+
+from monoscript.parser import ScriptParser, ScriptNode
 
 
 class ProcessAllStrategy(Enum):
@@ -28,7 +31,7 @@ class PythonModuleMerger:
         self.all_init_explicit_entries = set()
         self.all_init_implicit_entries = set()
         self.all_external_imports = set()
-        self.processed_code = []
+        self.processed_code: list[tuple[FileParseResult, str]] = []
         self.processed_files = set()
 
     def iter_files(self):
@@ -36,7 +39,8 @@ class PythonModuleMerger:
             for filename in sorted(files):
                 if filename.endswith(".py"):
                     file_path = os.path.join(root, filename)
-                    if file_path in self.processed_files:
+                    rel_path = os.path.relpath(file_path, self.module_path)
+                    if rel_path in self.processed_files:
                         continue
                     yield file_path
 
@@ -48,7 +52,7 @@ class PythonModuleMerger:
             self.process_file(init_file)
 
             for file_path in self.iter_files():
-                self.process_file(file_path)
+                self.process_file(file_path, append=True)
 
         final_code = self.generate_code()
 
@@ -77,27 +81,74 @@ class PythonModuleMerger:
             merged_code.append("\n\n")
 
         # code
-        for body, rel_path in self.processed_code:
+        for parse_result, rel_path in self.processed_code:
+            # remove some elements
+            elements_to_remove = parse_result.internal_imports_all + parse_result.all_nodes
+            if self.organize_imports:
+                elements_to_remove += parse_result.external_imports_nodes
+
+            for node in set(elements_to_remove):
+                node.remove()
+
             merged_code.append(f"# --- {rel_path} ---\n")
-            merged_code.extend([ast.unparse(node) + "\n" for node in body])
+            merged_code.extend(parse_result.root_node.get_code())
             merged_code.append("\n\n")
 
         return ''.join(merged_code)
 
-    def process_file(self, file_path):
+    def parse_python_file(self, file_path) -> 'FileParseResult':
+        """Parses a Python file and extracts valid code while handling imports, '__all__', and redundant entries."""
+        with open(file_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        parser = ScriptParser(code)
+        root_node = parser.parse()
+
+        explicit_all_entries = set()
+        all_nodes = list()
+        external_imports_nodes = list()
+        internal_imports_nodes = list()
+        internal_imports_all = list()
+
+        # look for __all__ & imports in top level statements
+        for node in root_node.children:
+            if isinstance(node.node, (ast.Import, ast.ImportFrom)):  # process top-level imports
+                if node.is_internal_import(self.module_name):
+                    internal_imports_nodes.append(node)
+                else:
+                    external_imports_nodes.append(node)
+            extracted_all_names = node.extract_all_names()
+            if extracted_all_names is not None:
+                explicit_all_entries.update(extracted_all_names)
+                all_nodes.append(node)
+
+        # remove internal imports
+        for node in root_node.walk():
+            if node.is_internal_import(self.module_name):
+                internal_imports_all.append(node)
+
+        return FileParseResult(root_node=root_node, explicit_all_entries=explicit_all_entries, all_nodes=all_nodes,
+                               external_imports_nodes=external_imports_nodes,
+                               internal_imports_nodes=internal_imports_nodes, internal_imports_all=internal_imports_all)
+
+    def process_file(self, file_path, append=False):
 
         rel_path = os.path.relpath(file_path, self.module_path)
-
-        body, explicit_all, external_imports, internal_imports = self.parse_python_file(file_path)
-        import_paths, imported_names = self.process_internal_imports(file_path, internal_imports)
+        parse_result: FileParseResult = self.parse_python_file(file_path)
+        import_paths, imported_names = self.process_internal_imports(file_path, parse_result.internal_imports_nodes)
         if rel_path == '__init__.py':
-            self.all_init_explicit_entries.update(explicit_all)
+            self.all_init_explicit_entries.update(parse_result.explicit_all_entries)
             self.all_init_implicit_entries = imported_names
         else:
-            self.all_other_explicit_entries.update(explicit_all)
+            self.all_other_explicit_entries.update(parse_result.explicit_all_entries)
 
-        self.all_external_imports.update(external_imports)
-        self.processed_code.append((body, rel_path))
+        self.all_external_imports.update(script_node.node for script_node in parse_result.external_imports_nodes)
+
+        # processed code
+        if append:
+            self.processed_code.append((parse_result, rel_path))
+        else:
+            self.processed_code.insert(0, (parse_result, rel_path))
         self.processed_files.add(rel_path)
 
         # process next paths:
@@ -106,17 +157,17 @@ class PythonModuleMerger:
             if rel_path not in self.processed_files:
                 self.process_file(path)
 
-    def process_internal_imports(self, current_path, internal_imports):
+    def process_internal_imports(self, current_path, internal_imports: list[ScriptNode]):
         imported_names = set()
         import_paths = set()
         for import_node in internal_imports:
-            node_import_paths, node_imported_names = self.process_internal_import(current_path, import_node)
+            node_import_paths, node_imported_names = self.process_internal_import(current_path, import_node.node)
             import_paths.update(node_import_paths)
             if node_imported_names:
                 imported_names.update(node_imported_names)
         return import_paths, imported_names
 
-    def process_internal_import(self, current_path, import_node):
+    def process_internal_import(self, current_path, import_node: ast.AST):
         imported_names = None
         import_paths = list()
 
@@ -234,7 +285,7 @@ class PythonModuleMerger:
         all_names.extend(self.additional_all)
         return ast.Assign(
             targets=[ast.Name(id="__all__")],
-            value=ast.List(elts=[ast.Constant(value=item) for item in all_names], )
+            value=ast.List(elts=[ast.Constant(value=item) for item in sorted(all_names)], )
         )
 
 
@@ -254,3 +305,13 @@ def unparse_node(node):
     else:
         module = ast.Module(body=[node], type_ignores=[])
     return ast.unparse(module)
+
+
+@dataclass
+class FileParseResult:
+    root_node: ScriptNode
+    explicit_all_entries: set[str]
+    all_nodes: list[ScriptNode]
+    external_imports_nodes: list[ScriptNode]
+    internal_imports_nodes: list[ScriptNode]
+    internal_imports_all: list[ScriptNode]

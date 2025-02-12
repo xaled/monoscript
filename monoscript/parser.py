@@ -9,7 +9,7 @@ class ScriptNode:
                  parent: 'ScriptNode' = None, code_lines=None, root: 'ScriptNode' = None):
         self.parent: Optional[ScriptNode] = parent
         self.code_lines = code_lines
-        self.node = node  # The AST node
+        self.node: ast.AST = node  # The AST node
         self.removed_parts = list()
 
         # root and coords
