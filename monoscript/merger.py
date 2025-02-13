@@ -25,7 +25,7 @@ class PythonModuleMerger:
                  module_name=None,
                  # metadata
                  module_version='',
-                 module_description='', author='', licence='', project_website=None,
+                 module_description='', author='', license='', project_website=None,
                  additional_headers: dict[str, str] = None,
 
                  # test scripts
@@ -56,7 +56,7 @@ class PythonModuleMerger:
         self.module_description = module_description
         self.module_version = module_version
         self.author = author
-        self.licence = licence
+        self.license = license
         self.project_website = project_website
         self.additional_headers = additional_headers
 
@@ -397,7 +397,7 @@ class PythonModuleMerger:
             f"Module Name: {self.module_name}",
             f"Description: {self.module_description}",
             f"Version: {self.module_version}",
-            f"Author: {self.author}", f"License: {self.licence}"
+            f"Author: {self.author}", f"License: {self.license}"
         ]
 
         if self.project_website:
@@ -424,7 +424,7 @@ class PythonModuleMerger:
                 process_all_strategy=ProcessAllStrategy.NONE,
                 module_name=f"test_{self.module_name}",
                 module_description=f'Test script for {self.module_name}', author=self.author,
-                licence=self.licence,
+                license=self.license,
                 run_test_scripts=False,
                 merge_test_scripts=False,
             )

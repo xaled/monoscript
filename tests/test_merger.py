@@ -152,7 +152,7 @@ class TestPythonModuleMerger(unittest.TestCase):
                                         module_description='bla bla bla',
                                         module_version='1.0.0',
                                         project_website='https://example.com',
-                                        licence='MIT',
+                                        license='MIT',
                                         additional_headers={'Author Email': 'test@example.com', 'Blood Type': 'X+'}
                                         )
             merger.merge_files()
