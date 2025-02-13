@@ -452,16 +452,19 @@ class PythonModuleMerger:
 
     def _get_run_tests_env(self):
         env = os.environ.copy()
+        print(env.get('PYTHONPATH', ''))
         python_paths = env.get('PYTHONPATH', '').split(os.pathsep)
+        module_parent = abspath(self.module_parent)
 
         # remove module parent script
-        if self.module_parent in python_paths:
-            python_paths.remove(self.module_parent)
+        if module_parent in python_paths:
+            python_paths.remove(module_parent)
 
         # add module output path
-        python_paths.insert(0, self.output_dir)
+        python_paths.insert(0, abspath(self.output_dir))
 
         env['PYTHONPATH'] = os.pathsep.join(python_paths)
+        print(env['PYTHONPATH'])
         return env
 
 

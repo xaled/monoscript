@@ -3,9 +3,7 @@ import ast
 import unittest
 import tempfile
 
-from monoscript import PythonModuleMerger, ProcessAllStrategy
-from monoscript.merger import ImportConflictException
-from monoscript.parser import ScriptParser
+from monoscript import PythonModuleMerger, ProcessAllStrategy, ImportConflictException, ScriptParser, main
 
 
 class TestPythonModuleMerger(unittest.TestCase):
@@ -292,6 +290,17 @@ class TestPythonModuleMerger(unittest.TestCase):
             result = merger.merge_files()
             self.assertFalse(result)
             self.assertGreater(len(merger.global_context_conflicts), 0)
+
+    def test_merge_main_simple(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            argv = ['test_modules/module1', '-D', tempdir]
+            merger = main(argv)
+            self.assertEqual(len(merger.processed_code), 3)
+            self.assertTrue(os.path.exists(merger.output_file))
+
+            with open(merger.output_file, 'r') as f:
+                merged_code = f.read()
+            self.assertIn("__all__ = ['CoreClass', 'UtilClass', 'util_function']", merged_code)
 
 
 if __name__ == '__main__':
