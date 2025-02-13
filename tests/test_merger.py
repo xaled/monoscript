@@ -152,6 +152,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir,
                                         author='Test <test@example.com>',
                                         module_description='bla bla bla',
+                                        module_version='1.0.0',
                                         project_website='https://example.com',
                                         licence='MIT',
                                         additional_headers={'Author Email': 'test@example.com', 'Blood Type': 'X+'}
@@ -161,6 +162,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             with open(merger.output_file, 'r') as f:
                 merged_code = f.read()
             self.assertIn("Description: bla bla bla", merged_code)
+            self.assertIn("Version: 1.0.0", merged_code)
             self.assertIn("Author: Test <test@example.com>", merged_code)
             self.assertIn("License: MIT", merged_code)
             self.assertIn("Additional Metadata:", merged_code)
