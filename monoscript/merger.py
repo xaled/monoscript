@@ -33,6 +33,7 @@ class PythonModuleMerger:
 
                  ):
         self.module_path = abspath(module_path)
+        self.module_parent = dirname(self.module_path)
         self.module_name = module_name or basename(module_path)
         self.output_dir = output_dir
         self.output_file = join(output_dir, f"{self.module_name}.py")
@@ -56,7 +57,7 @@ class PythonModuleMerger:
         self.additional_headers = additional_headers
 
         # test scripts
-        self.test_scripts_dirpath = test_scripts_dirpath or join(dirname(self.module_path), test_scripts_dirname)
+        self.test_scripts_dirpath = test_scripts_dirpath or join(self.module_parent, test_scripts_dirname)
         self.generate_test_script = isdir(self.test_scripts_dirpath) if generate_test_script is None \
             else generate_test_script
         self.test_merger = None
@@ -99,7 +100,8 @@ class PythonModuleMerger:
 
         # generate and run tests
         if self.generate_test_script:
-            self.generate_and_run_tests()
+            return self.generate_and_run_tests()
+        return True
 
     def generate_code(self):
         # header and metadata
@@ -369,7 +371,7 @@ class PythonModuleMerger:
     def generate_and_run_tests(self):
         info(f"Started generating test script...")
         self.test_merger = PythonModuleMerger(
-            self.test_scripts_dirpath, output_dir=self.output_dir,
+            self.test_scripts_dirpath, output_dir=join(self.output_dir, 'tests'),
             process_all_strategy=ProcessAllStrategy.NONE,
             module_name=f"test_{self.module_name}",
             module_description=f'Test script for {self.module_name}', author=self.author,
@@ -379,12 +381,27 @@ class PythonModuleMerger:
         self.test_merger.merge_files()
 
         info(f"Running test script {self.test_merger.output_file}...")
-        result = subprocess.run(['python3', os.path.abspath(self.test_merger.output_file)], cwd=self.output_dir,)
+        result = subprocess.run(['python3', os.path.abspath(self.test_merger.output_file)], cwd=self.output_dir,
+                                env=self._get_env())
         if result.returncode == 0:
             success("Test script finished successfully")
         else:
             error("Test script returned errors.")
         return result.returncode == 0
+
+    def _get_env(self):
+        env = os.environ.copy()
+        python_paths = env.get('PYTHONPATH', '').split(os.pathsep)
+
+        # remove module parent script
+        if self.module_parent in python_paths:
+            python_paths.remove(self.module_parent)
+
+        # add module output path
+        python_paths.insert(0, self.output_dir)
+
+        env['PYTHONPATH'] = os.pathsep.join(python_paths)
+        return env
 
 
 class ImportConflictException(Exception):
