@@ -33,7 +33,7 @@ class ScriptNode:
 
         # context
         if self.parent is None or isinstance(self.node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            self.context = list()
+            self.context = dict()
         else:
             self.context = self.parent.context
 
@@ -43,13 +43,13 @@ class ScriptNode:
         def _process_assign_targets(_targets):
             for _target in _targets:
                 if isinstance(_target, ast.Name):
-                    self.context.append(_target.id)
+                    self.context[_target.id] = self
                 elif isinstance(_target, ast.Tuple):
                     _process_assign_targets(_target.elts)
 
         if isinstance(self.node, (ast.Import, ast.ImportFrom)):
             for alias in self.node.names:
-                self.context.append(alias.asname or alias.name)
+                self.context[alias.asname or alias.name] = self
         elif isinstance(self.node, ast.Assign):
             _process_assign_targets(self.node.targets)
         elif isinstance(self.node, (ast.AnnAssign, ast.For)):
@@ -59,12 +59,13 @@ class ScriptNode:
                 _process_assign_targets([self.node.optional_vars])
         elif isinstance(self.node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if self.parent:
-                self.parent.context.append(self.node.name)
+                self.parent.context[self.node.name] = self
             else:
-                self.context.append(self.node.name)
+                self.context[self.node.name] = self
             # TODO: function & async function parameter names
         elif isinstance(self.node, (ast.Global, ast.Nonlocal)):
-            self.context.extend(self.node.names)
+            for name in self.node.names:
+                self.context[name] = self
 
     def __repr__(self):
         return f"ScriptNode(type={type(self.node).__name__}, code={repr(self.get_code())}, children={len(self.children)})"

@@ -4,6 +4,7 @@ import unittest
 import tempfile
 
 from monoscript import PythonModuleMerger, ProcessAllStrategy
+from monoscript.merger import ImportConflictException
 from monoscript.parser import ScriptParser
 
 
@@ -253,6 +254,42 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertTrue(result)
             self.assertTrue(os.path.exists(merger.output_file))
             self.assertIsNone(merger.test_merger)
+
+    def test_merge_with_no_conflicts(self):
+        # no conflicts
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir,
+                                        run_test_scripts=False)
+            result = merger.merge_files()
+            self.assertTrue(result)
+            self.assertTrue(os.path.exists(merger.output_file))
+            self.assertEqual(0, len(merger.global_context_conflicts))
+
+    def test_merge_with_import_conflicts(self):
+        # import conflicts
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module5_import_conflicts", output_dir=tempdir,
+                                        run_test_scripts=False)
+            with self.assertRaises(ImportConflictException):
+                merger.merge_files()
+
+    def test_merge_with_name_conflicts(self):
+        # Name Conflicts
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module6_name_conflicts", output_dir=tempdir,
+                                        run_test_scripts=False)
+            result = merger.merge_files()
+            self.assertTrue(result)
+            self.assertTrue(os.path.exists(merger.output_file))
+            self.assertGreater(len(merger.global_context_conflicts), 0)
+
+    def test_merge_failed_test_because_of_conflicts(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module7", output_dir=tempdir,
+                                        test_scripts_dirname='module7_tests', merge_test_scripts=False)
+            result = merger.merge_files()
+            self.assertFalse(result)
+            self.assertGreater(len(merger.global_context_conflicts), 0)
 
 
 if __name__ == '__main__':

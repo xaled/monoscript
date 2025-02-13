@@ -1,6 +1,7 @@
 import datetime
 import os
 import subprocess
+from collections import defaultdict
 from os.path import join, dirname, basename, abspath, exists, relpath, isfile, isdir, normpath
 import ast
 from dataclasses import dataclass
@@ -64,6 +65,10 @@ class PythonModuleMerger:
         self.merge_test_scripts = merge_test_scripts
         self.test_merger = None
 
+        # global names
+        self.global_context = {}
+        self.global_context_conflicts = defaultdict(set)
+
     def iter_files(self):
         for root, _, files in os.walk(self.module_path):
             for filename in sorted(files):
@@ -117,10 +122,14 @@ class PythonModuleMerger:
 
         # top level imports if organized
         if self.organize_imports:
-            top_level_imports = self.organize_to_level_imports()
-            if top_level_imports:
-                merged_code.extend([ast.unparse(node) + "\n" for node in top_level_imports])
-                merged_code.append("\n\n")
+            try:
+                top_level_imports = self.organize_to_level_imports()
+                if top_level_imports:
+                    merged_code.extend([ast.unparse(node) + "\n" for node in top_level_imports])
+                    merged_code.append("\n\n")
+            except ImportConflictException as e:
+                error(str(e))
+                raise
 
         # code
         for parse_result, rel_path in self.processed_code:
@@ -184,7 +193,6 @@ class PythonModuleMerger:
                                internal_imports_nodes=internal_imports_nodes, internal_imports_all=internal_imports_all)
 
     def process_file(self, file_path, append=False):
-
         rel_path = relpath(file_path, self.module_path)
         parse_result: FileParseResult = self.parse_python_file(file_path)
         import_paths, imported_names = self.process_internal_imports(file_path, parse_result.internal_imports_nodes)
@@ -195,6 +203,9 @@ class PythonModuleMerger:
             self.all_other_explicit_entries.update(parse_result.explicit_all_entries)
 
         self.all_external_imports.update(script_node.node for script_node in parse_result.external_imports_nodes)
+
+        # global names warnings
+        self.check_global_names(parse_result, rel_path)
 
         # processed code
         if append:
@@ -208,6 +219,37 @@ class PythonModuleMerger:
             rel_path = relpath(path, self.module_path)
             if rel_path not in self.processed_files:
                 self.process_file(path)
+
+    def check_global_names(self, parse_result, rel_path):
+        if parse_result.root_node and parse_result.root_node.context:
+            for name, script_node in parse_result.root_node.context.items():
+                # ignore _
+                if name == '_':
+                    continue
+
+                # ignore internal imports
+                if script_node.is_internal_import(self.module_name):
+                    continue
+
+                # ignore external imports without asname
+                if isinstance(script_node.node, (ast.Import, ast.ImportFrom)):
+                    # find which alias
+                    alias = None
+                    for alias in script_node.node.names:
+                        if (alias.asname or alias.name) == name:
+                            break
+
+                    # check asname
+                    if not alias or not alias.asname:
+                        continue
+
+                if name in self.global_context:
+                    other_rel_path, other_script_node = self.global_context[name]
+                    warning(
+                        f"Global alias conflict {name} exists in two files {rel_path} and {other_rel_path}.")
+                    self.global_context_conflicts[name].update((rel_path, other_rel_path))
+                else:
+                    self.global_context[name] = rel_path, script_node
 
     def process_internal_imports(self, current_path, internal_imports: list[ScriptNode]):
         imported_names = set()
