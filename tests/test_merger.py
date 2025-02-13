@@ -2,7 +2,6 @@ import os
 import ast
 import unittest
 import tempfile
-from pprint import pprint
 
 from monoscript import PythonModuleMerger, ProcessAllStrategy
 from monoscript.parser import ScriptParser
@@ -112,11 +111,6 @@ class TestPythonModuleMerger(unittest.TestCase):
             merger.merge_files()
             self.assertEqual(len(merger.processed_code), 3)
             self.assertTrue(os.path.exists(merger.output_file))
-
-            # for parsing_result, rel_path in merger.processed_code:
-            #     print(rel_path)
-            #     pprint(parsing_result.__dict__)
-            #     print('--------')
 
             with open(merger.output_file, 'r') as f:
                 merged_code = f.read()
@@ -237,42 +231,17 @@ class TestPythonModuleMerger(unittest.TestCase):
                 merged_code = f.read()
             self.assertIn("if __name__ == '__main__':", merged_code)
 
-    # def test_merge_files_no_init(self):
-    #     merger = PythonModuleMerger("tests/test_modules/test_module_no_init")
-    #     merger.merge_files()
-    #     output_file = os.path.join(merger.output_dir, "test_module_no_init.py")
-    #
-    #     self.assertTrue(os.path.exists(output_file))
-    #
-    #     with open(output_file, 'r') as f:
-    #         merged_code = f.read()
-    #     self.assertIn("__all__ = ['b']", merged_code)
-    #     self.assertIn("def func1(): pass", merged_code)
-    #     self.assertIn("from tests.test_modules.test_module_no_init.module1 import func1", merged_code)
-    #
-    # def test_merge_files_custom_all(self):
-    #     merger = PythonModuleMerger("tests/test_modules/test_module", custom_all=['c'])
-    #     merger.merge_files()
-    #     output_file = os.path.join(merger.output_dir, "test_module.py")
-    #     with open(output_file, 'r') as f:
-    #         merged_code = f.read()
-    #     self.assertIn("__all__ = ['a', 'c']", merged_code)
-    #
-    # def test_merge_files_process_all_none(self):
-    #     merger = PythonModuleMerger("tests/test_modules/test_module", process_all='none')
-    #     merger.merge_files()
-    #     output_file = os.path.join(merger.output_dir, "test_module.py")
-    #     with open(output_file, 'r') as f:
-    #         merged_code = f.read()
-    #     self.assertNotIn("__all__", merged_code)
-    #
-    # def test_merge_files_process_all_remove(self):
-    #     merger = PythonModuleMerger("tests/test_modules/test_module", process_all='remove')
-    #     merger.merge_files()
-    #     output_file = os.path.join(merger.output_dir, "test_module.py")
-    #     with open(output_file, 'r') as f:
-    #         merged_code = f.read()
-    #     self.assertNotIn("__all__", merged_code)
+    def test_merge_with_tests(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module4", output_dir=tempdir,
+                                        test_scripts_dirname='module4_tests')
+            merger.merge_files()
+            self.assertTrue(os.path.exists(merger.output_file))
+            self.assertTrue(os.path.exists(merger.test_merger.output_file))
+            with open(merger.test_merger.output_file, 'r') as f:
+                merged_code = f.read()
+
+            self.assertIn("if __name__ == '__main__':", merged_code)
 
 
 if __name__ == '__main__':

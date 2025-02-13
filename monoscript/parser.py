@@ -149,10 +149,14 @@ class ScriptNode:
         """Checks if an import is internal (e.g., 'from mymodule.utils import x' or 'from .utils import x')."""
         if isinstance(self.node, ast.Import):
             # TODO: Fix any by extracting imports or adding a warning if not all
-            return any(alias.name.startswith(module_name + ".") for alias in self.node.names)
+            return any(self.is_local_module(module_name, alias.name) for alias in self.node.names)
         elif isinstance(self.node, ast.ImportFrom):
-            return self.node.level > 0 or self.node.module.startswith(module_name + '.')
+            return self.node.level > 0 or self.is_local_module(module_name, self.node.module)
         return False
+
+    @staticmethod
+    def is_local_module(module_name, module_path):
+        return module_path == module_name or module_path.startswith(module_name + ".")
 
     def extract_all_names(self) -> Optional[List[str]]:
         if not isinstance(self.node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):

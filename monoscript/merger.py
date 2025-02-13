@@ -1,11 +1,13 @@
 import datetime
 import os
+import subprocess
+from os.path import join, dirname, basename, abspath, exists, relpath, isfile, isdir, normpath
 import ast
 from dataclasses import dataclass
 from enum import Enum
 from typing import Union, Optional
-
-from monoscript.parser import ScriptParser, ScriptNode
+from .color_print import info, error, warning, success
+from .parser import ScriptParser, ScriptNode
 
 
 class ProcessAllStrategy(Enum):
@@ -19,13 +21,21 @@ class PythonModuleMerger:
                  process_all_strategy: ProcessAllStrategy = ProcessAllStrategy.AUTO, custom_all=None,
                  additional_all=None,
                  organize_imports=True,
+                 module_name=None,
                  # metadata
                  module_description='', author='', licence='', project_website=None,
-                 additional_headers: dict[str, str] = None):
-        self.module_path = os.path.abspath(module_path)
-        self.module_name = os.path.basename(module_path)
+                 additional_headers: dict[str, str] = None,
+
+                 # test scripts
+                 test_scripts_dirname='tests',
+                 test_scripts_dirpath=None,  # or join(module_parent, test_scripts_dirname)
+                 generate_test_script=None,  # True, False or None (Auto: if test_scripts_dirpath exists);
+
+                 ):
+        self.module_path = abspath(module_path)
+        self.module_name = module_name or basename(module_path)
         self.output_dir = output_dir
-        self.output_file = os.path.join(output_dir, f"{self.module_name}.py")
+        self.output_file = join(output_dir, f"{self.module_name}.py")
         self.process_all_strategy = process_all_strategy  # "none", "auto", "remove"
         self.custom_all = custom_all if custom_all is not None else []
         self.additional_all = additional_all or []
@@ -45,12 +55,18 @@ class PythonModuleMerger:
         self.project_website = project_website
         self.additional_headers = additional_headers
 
+        # test scripts
+        self.test_scripts_dirpath = test_scripts_dirpath or join(dirname(self.module_path), test_scripts_dirname)
+        self.generate_test_script = isdir(self.test_scripts_dirpath) if generate_test_script is None \
+            else generate_test_script
+        self.test_merger = None
+
     def iter_files(self):
         for root, _, files in os.walk(self.module_path):
             for filename in sorted(files):
                 if filename.endswith(".py"):
-                    file_path = os.path.join(root, filename)
-                    rel_path = os.path.relpath(file_path, self.module_path)
+                    file_path = join(root, filename)
+                    rel_path = relpath(file_path, self.module_path)
                     if rel_path in self.processed_files:
                         continue
                     yield file_path
@@ -58,18 +74,20 @@ class PythonModuleMerger:
     def merge_files(self):
         """Merges all Python files into a single file while handling imports and '__all__'."""
         # Process __init__.py first (to extract __all__)
-        init_file = os.path.join(self.module_path, "__init__.py")
-        main_file = os.path.join(self.module_path, "__main__.py")
+        info(f"Started processing files in {self.module_path}...")
+        init_file = join(self.module_path, "__init__.py")
+        main_file = join(self.module_path, "__main__.py")
 
-        if os.path.exists(main_file):
+        if exists(main_file):
             self.process_file(main_file)
 
-        if os.path.exists(init_file):
+        if exists(init_file) and "__init__.py" not in self.processed_files:
             self.process_file(init_file)
 
         for file_path in self.iter_files():
             self.process_file(file_path, append=True)
 
+        success(f"Successfully processed {len(self.processed_files)} python files.")
         final_code = self.generate_code()
 
         # Write to output file
@@ -77,7 +95,11 @@ class PythonModuleMerger:
         with open(self.output_file, "w", encoding="utf-8") as f:
             f.write(final_code)
 
-        print(f"Module merged successfully into {self.output_file}!")
+        success(f"Module merged successfully into {self.output_file}!")
+
+        # generate and run tests
+        if self.generate_test_script:
+            self.generate_and_run_tests()
 
     def generate_code(self):
         # header and metadata
@@ -159,7 +181,7 @@ class PythonModuleMerger:
 
     def process_file(self, file_path, append=False):
 
-        rel_path = os.path.relpath(file_path, self.module_path)
+        rel_path = relpath(file_path, self.module_path)
         parse_result: FileParseResult = self.parse_python_file(file_path)
         import_paths, imported_names = self.process_internal_imports(file_path, parse_result.internal_imports_nodes)
         if rel_path == '__init__.py':
@@ -179,7 +201,7 @@ class PythonModuleMerger:
 
         # process next paths:
         for path in import_paths:
-            rel_path = os.path.relpath(path, self.module_path)
+            rel_path = relpath(path, self.module_path)
             if rel_path not in self.processed_files:
                 self.process_file(path)
 
@@ -199,38 +221,38 @@ class PythonModuleMerger:
 
         def _find_module_file(_sub_module_parent, _sub_module_name):
             for path in (
-                    os.path.join(_sub_module_parent, _sub_module_name, "__init__.py"),
-                    os.path.join(_sub_module_parent, f"{_sub_module_name}.py"),
+                    join(_sub_module_parent, _sub_module_name, "__init__.py"),
+                    join(_sub_module_parent, f"{_sub_module_name}.py"),
             ):
-                if os.path.isfile(path):
+                if isfile(path):
                     return path
             return None
 
         if isinstance(import_node, ast.Import):
             for alias in import_node.names:
-                assert alias.name.startswith(self.module_name + ".")
+                assert ScriptNode.is_local_module(self.module_name, alias.name)
                 sub_module_import_path_parts = alias.name.split('.')
-                sub_module_parent_dir = os.path.join(self.module_path, *sub_module_import_path_parts[1:-1])
+                sub_module_parent_dir = join(self.module_path, *sub_module_import_path_parts[1:-1])
                 sub_module_file_path = _find_module_file(sub_module_parent_dir, sub_module_import_path_parts[-1])
                 if sub_module_file_path:
                     import_paths.append(sub_module_file_path)
         elif isinstance(import_node, ast.ImportFrom):
             # Relative or absolute import (e.g., from .utils import x or from mymodule.utils import x)
 
-            assert import_node.level > 0 or import_node.module.startswith(self.module_name + ".")
+            assert import_node.level > 0 or ScriptNode.is_local_module(self.module_name, import_node.module)
 
             if import_node.level > 0:  # relative
-                start_path = os.path.normpath(os.path.join(current_path, '../' * import_node.level))
+                start_path = normpath(join(current_path, '../' * import_node.level))
                 if import_node.module:
                     sub_module_import_path_parts = import_node.module.split('.')
-                    sub_module_parent_dir = os.path.join(start_path, *sub_module_import_path_parts[:-1])
+                    sub_module_parent_dir = join(start_path, *sub_module_import_path_parts[:-1])
                     sub_module_file_path = _find_module_file(sub_module_parent_dir, sub_module_import_path_parts[-1])
                 else:  # Handle 'from . import x'
-                    start_path, sub_module_name = os.path.dirname(start_path), os.path.basename(start_path)
+                    start_path, sub_module_name = dirname(start_path), basename(start_path)
                     sub_module_file_path = _find_module_file(start_path, sub_module_name)
             else:  # absolute
                 sub_module_import_path_parts = import_node.module.split('.')
-                sub_module_parent_dir = os.path.join(self.module_path, *sub_module_import_path_parts[1:-1])
+                sub_module_parent_dir = join(self.module_path, *sub_module_import_path_parts[1:-1])
                 sub_module_file_path = _find_module_file(sub_module_parent_dir, sub_module_import_path_parts[-1])
 
             if sub_module_file_path:
@@ -343,6 +365,26 @@ class PythonModuleMerger:
         docstring_parts.append('"""\n')  # Close the docstring
 
         return '\n'.join(docstring_parts)
+
+    def generate_and_run_tests(self):
+        info(f"Started generating test script...")
+        self.test_merger = PythonModuleMerger(
+            self.test_scripts_dirpath, output_dir=self.output_dir,
+            process_all_strategy=ProcessAllStrategy.NONE,
+            module_name=f"test_{self.module_name}",
+            module_description=f'Test script for {self.module_name}', author=self.author,
+            licence=self.licence,
+            generate_test_script=False,
+        )
+        self.test_merger.merge_files()
+
+        info(f"Running test script {self.test_merger.output_file}...")
+        result = subprocess.run(['python3', os.path.abspath(self.test_merger.output_file)], cwd=self.output_dir,)
+        if result.returncode == 0:
+            success("Test script finished successfully")
+        else:
+            error("Test script returned errors.")
+        return result.returncode == 0
 
 
 class ImportConflictException(Exception):
