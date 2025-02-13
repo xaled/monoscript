@@ -29,7 +29,8 @@ class PythonModuleMerger:
                  # test scripts
                  test_scripts_dirname='tests',
                  test_scripts_dirpath=None,  # or join(module_parent, test_scripts_dirname)
-                 generate_test_script=None,  # True, False or None (Auto: if test_scripts_dirpath exists);
+                 merge_test_scripts=False,  # True, False;
+                 run_test_scripts=None,  # True, False or None (Auto: if test_scripts_dirpath exists);
 
                  ):
         self.module_path = abspath(module_path)
@@ -58,8 +59,9 @@ class PythonModuleMerger:
 
         # test scripts
         self.test_scripts_dirpath = test_scripts_dirpath or join(self.module_parent, test_scripts_dirname)
-        self.generate_test_script = isdir(self.test_scripts_dirpath) if generate_test_script is None \
-            else generate_test_script
+        self.run_test_scripts = isdir(self.test_scripts_dirpath) if run_test_scripts is None \
+            else run_test_scripts
+        self.merge_test_scripts = merge_test_scripts
         self.test_merger = None
 
     def iter_files(self):
@@ -99,7 +101,7 @@ class PythonModuleMerger:
         success(f"Module merged successfully into {self.output_file}!")
 
         # generate and run tests
-        if self.generate_test_script:
+        if self.run_test_scripts:
             return self.generate_and_run_tests()
         return True
 
@@ -369,27 +371,41 @@ class PythonModuleMerger:
         return '\n'.join(docstring_parts)
 
     def generate_and_run_tests(self):
-        info(f"Started generating test script...")
-        self.test_merger = PythonModuleMerger(
-            self.test_scripts_dirpath, output_dir=join(self.output_dir, 'tests'),
-            process_all_strategy=ProcessAllStrategy.NONE,
-            module_name=f"test_{self.module_name}",
-            module_description=f'Test script for {self.module_name}', author=self.author,
-            licence=self.licence,
-            generate_test_script=False,
-        )
-        self.test_merger.merge_files()
+        info(f"Started merging test scripts...")
 
-        info(f"Running test script {self.test_merger.output_file}...")
-        result = subprocess.run(['python3', os.path.abspath(self.test_merger.output_file)], cwd=self.output_dir,
-                                env=self._get_env())
-        if result.returncode == 0:
-            success("Test script finished successfully")
+        if self.merge_test_scripts:
+            self.test_merger = PythonModuleMerger(
+                self.test_scripts_dirpath, output_dir=join(self.output_dir, 'tests'),
+                process_all_strategy=ProcessAllStrategy.NONE,
+                module_name=f"test_{self.module_name}",
+                module_description=f'Test script for {self.module_name}', author=self.author,
+                licence=self.licence,
+                run_test_scripts=False,
+                merge_test_scripts=False,
+            )
+            self.test_merger.merge_files()
+            test_dir = self.test_merger.output_dir
+            test_files = [self.test_merger.output_file]
         else:
-            error("Test script returned errors.")
+            test_dir = self.test_scripts_dirpath
+            test_files = [join(self.test_scripts_dirpath, fn) for fn in os.listdir(self.test_scripts_dirpath) if
+                          fn.endswith('.py') and fn.startswith('test_')]
+
+        env = self._get_run_tests_env()
+        test_results = [self._run_test_script(test_file, env=env, cwd=test_dir) for test_file in test_files]
+        return all(test_results)
+
+    def _run_test_script(self, filepath, env, cwd):
+        info(f"Running test script {filepath}...")
+        result = subprocess.run(['python3', abspath(filepath)], cwd=cwd,
+                                env=env)
+        if result.returncode == 0:
+            success(f"Test script {filepath} finished successfully")
+        else:
+            error(f"Test script {filepath} returned errors.")
         return result.returncode == 0
 
-    def _get_env(self):
+    def _get_run_tests_env(self):
         env = os.environ.copy()
         python_paths = env.get('PYTHONPATH', '').split(os.pathsep)
 

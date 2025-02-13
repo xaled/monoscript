@@ -232,17 +232,27 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertIn("if __name__ == '__main__':", merged_code)
 
     def test_merge_with_tests(self):
+        # with merge
         with tempfile.TemporaryDirectory() as tempdir:
             merger = PythonModuleMerger("test_modules/module4", output_dir=tempdir,
-                                        test_scripts_dirname='module4_tests')
+                                        test_scripts_dirname='module4_tests', merge_test_scripts=True)
             result = merger.merge_files()
+            self.assertTrue(result)
             self.assertTrue(os.path.exists(merger.output_file))
             self.assertTrue(os.path.exists(merger.test_merger.output_file))
             with open(merger.test_merger.output_file, 'r') as f:
                 merged_code = f.read()
 
-            self.assertIn("if __name__ == '__main__':", merged_code)
+            self.assertIn("class Module4TestCase1(unittest.TestCase)", merged_code)
+
+        # without merge
+        with tempfile.TemporaryDirectory() as tempdir:
+            merger = PythonModuleMerger("test_modules/module4", output_dir=tempdir,
+                                        test_scripts_dirname='module4_tests', merge_test_scripts=False)
+            result = merger.merge_files()
             self.assertTrue(result)
+            self.assertTrue(os.path.exists(merger.output_file))
+            self.assertIsNone(merger.test_merger)
 
 
 if __name__ == '__main__':
