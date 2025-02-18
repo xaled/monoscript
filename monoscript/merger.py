@@ -147,12 +147,14 @@ class PythonModuleMerger:
             for node in set(elements_to_remove):
                 node.remove()
 
-            merged_code.append(f"# --- {rel_path} ---\n")
+            merged_code.append(f"# --- Start of {rel_path} ---\n")
             code = parse_result.root_node.get_code() if parse_result.root_node else None
             if not code or not code.strip():
-                merged_code.append("# --- empty file")
+                # merged_code.append("# --- empty file")
+                pass
             else:
                 merged_code.append(code)
+            merged_code.append(f"\n# --- End of {rel_path} ---\n")
             merged_code.append("\n\n")
 
         return ''.join(merged_code)

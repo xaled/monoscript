@@ -113,7 +113,7 @@ class TestPythonModuleMerger(unittest.TestCase):
 
             with open(merger.output_file, 'r') as f:
                 merged_code = f.read()
-            # print(merged_code)
+            print(merged_code)
             self.assertIn("__all__ = ['CoreClass', 'UtilClass', 'util_function']", merged_code)
             self.assertIn("def util_function():", merged_code)
             self.assertIn("from os.path import join", merged_code)
