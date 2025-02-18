@@ -4,6 +4,7 @@ if __name__ == '__main__':
     PythonModuleMerger(
         module_path='monoscript',
         module_version=VERSION,
+        requirements=['None'],
         module_description='A Python tool that merges multi-file modules into a single, self-contained script',
         author='Khalid Grandi https://github.com/xaled',
         license='MIT License Copyright (c) 2025 Khalid Grandi',
