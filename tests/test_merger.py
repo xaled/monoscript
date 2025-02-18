@@ -118,6 +118,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertIn("def util_function():", merged_code)
             self.assertIn("from os.path import join", merged_code)
             self.assertIn("import sys\nfrom os.path import join", merged_code)
+            self.assertNotIn("__all__ = ['util_function', 'UtilClass']", merged_code)
 
         with tempfile.TemporaryDirectory() as tempdir:
             merger = PythonModuleMerger("test_modules/module1", output_dir=tempdir, organize_imports=False)
