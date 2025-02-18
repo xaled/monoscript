@@ -1,6 +1,7 @@
 import datetime
 import os
 import subprocess
+import sys
 from collections import defaultdict
 from os.path import join, dirname, basename, abspath, exists, relpath, isfile, isdir, normpath
 import ast
@@ -459,9 +460,10 @@ class PythonModuleMerger:
         test_results = [self._run_test_script(test_file, env=env, cwd=test_dir) for test_file in test_files]
         return all(test_results)
 
-    def _run_test_script(self, filepath, env, cwd):
+    @staticmethod
+    def _run_test_script(filepath, env, cwd):
         info(f"Running test script {filepath}...")
-        result = subprocess.run(['python3', abspath(filepath)], cwd=cwd,
+        result = subprocess.run([sys.executable, abspath(filepath)], cwd=cwd,
                                 env=env)
         if result.returncode == 0:
             success(f"Test script {filepath} finished successfully")
