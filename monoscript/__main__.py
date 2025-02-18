@@ -22,6 +22,8 @@ def main(argv=None):
     parser.add_argument("--author", default="", help="Author of the module.")
     parser.add_argument("--license", default="", help="Module license.")
     parser.add_argument("--project-website", help="Project website.")
+    parser.add_argument("--requirements", help="Module requirements (comma-separated).")
+    parser.add_argument("--requirements-filename", default="requirements.txt", help="Module requirements file name.")
     parser.add_argument("--additional-headers", help="Additional headers (e.g., 'Key1=Value1,Key2=Value2').")
 
     # Test script arguments
@@ -52,6 +54,8 @@ def main(argv=None):
         module_description=args.module_description,
         author=args.author,
         license=args.license,
+        requirements=args.requirements,
+        requirements_filename=args.requirements_filename,
         project_website=args.project_website,
         additional_headers=additional_headers,
         test_scripts_dirname=args.test_scripts_dirname,

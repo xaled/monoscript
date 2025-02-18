@@ -27,6 +27,8 @@ class PythonModuleMerger:
                  module_version='',
                  module_description='', author='', license='', project_website=None,
                  additional_headers: dict[str, str] = None,
+                 requirements: Optional[list[str]] = None,
+                 requirements_filename: str = 'requirements.txt',
 
                  # test scripts
                  test_scripts_dirname='tests',
@@ -59,6 +61,8 @@ class PythonModuleMerger:
         self.license = license
         self.project_website = project_website
         self.additional_headers = additional_headers
+        self.requirements = requirements
+        self.requirements_filename = requirements_filename
 
         # test scripts
         self.test_scripts_dirpath = test_scripts_dirpath or join(self.module_parent, test_scripts_dirname)
@@ -399,6 +403,19 @@ class PythonModuleMerger:
             f"Version: {self.module_version}",
             f"Author: {self.author}", f"License: {self.license}"
         ]
+        if self.requirements is None:
+            req_filepath = join(self.module_parent, self.requirements_filename)
+            try:
+                with open(req_filepath) as fou:
+                    requirements = [req.strip() for req in fou.readlines()]
+            except Exception as e:
+                error(f"Could not load requirements file {req_filepath}: {e}")
+                requirements = None
+        else:
+            requirements = self.requirements
+
+        if requirements:
+            docstring_parts.append(f"Requirements: {', '.join(requirements)}")
 
         if self.project_website:
             docstring_parts.append(f"Website: {self.project_website}")

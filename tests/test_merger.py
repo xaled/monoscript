@@ -152,6 +152,7 @@ class TestPythonModuleMerger(unittest.TestCase):
                                         module_description='bla bla bla',
                                         module_version='1.0.0',
                                         project_website='https://example.com',
+                                        requirements=['module1', 'module2'],
                                         license='MIT',
                                         additional_headers={'Author Email': 'test@example.com', 'Blood Type': 'X+'}
                                         )
@@ -163,6 +164,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             self.assertIn("Version: 1.0.0", merged_code)
             self.assertIn("Author: Test <test@example.com>", merged_code)
             self.assertIn("License: MIT", merged_code)
+            self.assertIn("Requirements: module1, module2", merged_code)
             self.assertIn("Additional Metadata:", merged_code)
             self.assertIn("  Author Email: test@example.com", merged_code)
             self.assertIn("  Blood Type: X+", merged_code)
