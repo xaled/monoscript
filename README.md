@@ -21,7 +21,7 @@ Monoscript is intended for small modules and should not be used for larger proje
 ## Installation
 Install Monoscript using pip:
 ```bash
-pip install -m monoscript
+pip install monoscript
 ```
 Alternatively, download `monoscript.py` from releases and use it directly.
 ---
