@@ -2,7 +2,7 @@
 from setuptools import setup
 from monoscript import VERSION
 import os
-# from m2r2 import convert
+# import m2r2
 import pypandoc
 
 
@@ -20,13 +20,10 @@ def load_requirements(requirements_file="requirements.txt"):
         return []
 
 
-# with open('README.md', 'r') as f:
-#     long_description = f.read()
-
-long_description = pypandoc.convert_file('README.md', 'rst')
-
-# with open('README.md', 'r') as f:
-#     long_description = convert(f.read())
+with open('README.md', 'r') as f:
+    long_description = f.read().replace('\n\n', '\n')
+    long_description = pypandoc.convert_text(long_description, 'rst', format='md')
+    # long_description = m2r2.convert(long_description)
 
 with open('LICENSE', 'r') as f:
     license_text = f.read()
