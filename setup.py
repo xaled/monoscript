@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
 from setuptools import setup
 from monoscript import VERSION
-import os
-# import m2r2
-import pypandoc
+
+# VERSION = ""
+URL = 'https://github.com/xaled/monoscript'
+DESCRIPTION = 'A Python tool that merges multi-file modules into a single, self-contained script.'
+
+
+def convert_rst(markdown_text, fallback_rst=None):
+    try:
+        import pypandoc
+        return pypandoc.convert_text(markdown_text, 'rst', format='md')
+    except:
+        try:
+            import m2r2
+            return m2r2.convert(markdown_text)
+        except:
+            return fallback_rst or markdown_text
 
 
 def load_requirements(requirements_file="requirements.txt"):
@@ -21,9 +34,7 @@ def load_requirements(requirements_file="requirements.txt"):
 
 
 with open('README.md', 'r') as f:
-    long_description = f.read().replace('\n\n', '\n')
-    long_description = pypandoc.convert_text(long_description, 'rst', format='md')
-    # long_description = m2r2.convert(long_description)
+    long_description = convert_rst(f.read().replace('\n\n', '\n'))
 
 with open('LICENSE', 'r') as f:
     license_text = f.read()
@@ -32,7 +43,7 @@ if __name__ == "__main__":
     setup(
         name='monoscript',
         version=VERSION,
-        description='A Python tool that merges multi-file modules into a single, self-contained script.',
+        description=DESCRIPTION,
         long_description_content_type="text/x-rst",
         long_description=long_description,
         keywords='packaging python',
@@ -44,7 +55,7 @@ if __name__ == "__main__":
             'Programming Language :: Python',
         ],
         license='MIT',
-        url='https://github.com/xaled/monoscript',
+        url=URL,
         install_requires=load_requirements(),
         test_suite="tests",
         # tests_require=load_requirements("requirements-test.txt"),
