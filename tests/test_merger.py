@@ -66,6 +66,7 @@ class TestPythonModuleMerger(unittest.TestCase):
             ("not_all = __all__ = ('a', 'b')", ['a', 'b']),
             ("__all__ = 1", []),
             ("__all__ = ['a', 'b', None]", ['a', 'b']),
+            ("__all__ = ['a', 'b', '*']", ['a', 'b']),
             ("__all__ = ['a', 'b',\n'c',\nNone\n]", ['a', 'b', 'c']),
 
         ]

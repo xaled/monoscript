@@ -177,7 +177,8 @@ class ScriptNode:
         # value_script_node = self.find_node_in_children(self.node.value)
         # all_names = [n.s for n in value_script_node.walk() if isinstance(n, ast.Str)]
 
-        all_names = [elt.s for elt in getattr(self.node.value, 'elts', []) if isinstance(elt, ast.Str)]
+        all_names = [elt.s for elt in getattr(self.node.value, 'elts', []) if isinstance(elt, ast.Str) and elt.s != '*']
+
         return all_names
 
     @staticmethod
