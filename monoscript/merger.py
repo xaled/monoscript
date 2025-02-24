@@ -138,8 +138,12 @@ class PythonModuleMerger:
                 error(str(e))
                 raise
 
+        # TODO: some code reordering
+
         # code
         for parse_result, rel_path in self.processed_code:
+            # TODO replace internal_imports_all as with assignment
+
             # remove some elements
             elements_to_remove = parse_result.internal_imports_all + parse_result.all_nodes
             if self.organize_imports:
@@ -224,6 +228,7 @@ class PythonModuleMerger:
         self.processed_files.add(rel_path)
 
         # process next paths:
+        # TODO: some code reordering??
         for path in import_paths:
             rel_path = relpath(path, self.module_path)
             if rel_path not in self.processed_files:
